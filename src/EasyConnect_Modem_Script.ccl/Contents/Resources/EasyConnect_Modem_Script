@@ -1,0 +1,665 @@
+! / ---------------------------------- ABOUT --------------------------------- \
+!
+!  Option GlobeTrotter EDGE 
+!
+!\ ------------------------------------ABOUT --------------------------------- /
+@ORIGINATE
+@ANSWER
+!
+note "ZTE" 1
+!
+!	Check APN
+!
+!ifstr 1 108 "*99#"
+!ifstr 1 108 "*99***1#"
+!ifstr 1 108 "*99***2#"
+!ifstr 1 108 "*99***3#"
+!ifstr 1 108 "*99***4#"
+!
+! / ----------------------------- INITIALIZATION ----------------------------- \
+!
+settries 0
+!
+@LABEL 1
+!
+! Set serial port speed to maximum allowed by driver
+! 
+serreset 1843200, 0, 8, 1
+hsreset 0 0 0 0 0 0
+!
+! Turn the modem and radio on
+!
+! note: issues with CFUN on h620...just skip
+
+jump 10
+matchclr
+matchstr 1 10 "OK\13\10"
+matchstr 2 2 "ERROR\13\10"
+write "AT+CFUN=1\13"
+matchread 30
+!
+!
+@LABEL 2
+!
+! Modem doesn't respond to power on, so turn the power off, then exit.
+! This will probably also fail, but when it fails it leaves the power off.
+! This seems to be more reliable than just exiting with an error.
+!
+!write "AT+CFUN=0\13"
+jump 101
+!
+@LABEL 9
+!
+! Attempt to reset the modem
+!
+DTRClear
+pause 5
+DTRSet
+flush
+return
+!
+! \ ----------------------------- INITIALIZATION ----------------------------- /
+!
+! / --------------------------- SIM CHECK AND PIN ---------------------------- \
+!
+@LABEL 10
+!
+! Check the SIM.  If a PIN is required, deal with it.
+!
+flush
+matchclr
+matchstr 1 20	"+CPIN: READY\13\10"
+matchstr 2 11	"+CPIN: SIM PIN\13\10"
+matchstr 3 116	"+CPIN: SIM PUK\13\10"
+matchstr 4 13	"+CPIN: PH-SIM PIN\13\10"
+matchstr 5 14	"+CME ERROR: 16\13\10"
+matchstr 6 110	"+CME ERROR: 10\13\10"
+matchstr 7 113	"+CME ERROR: 13\13\10"
+matchstr 8 114	"+CME ERROR: 14\13\10"
+matchstr 9 115	"+CME ERROR: 15\13\10"
+matchstr 10 20	"+CPIN: SIM PIN2\13\10"
+note "Checking the SIM ..." 1
+write "AT+CPIN?\13"
+matchRead 30
+inctries
+iftries 3 109
+jump 10
+!
+! 
+@LABEL 11
+! 
+! Ask for a PIN
+!
+ASK 1 "Please enter your SIM PIN code (4-8 digits):" 107
+JUMP 15
+!
+!
+@LABEL 12
+!
+! SIM locked; ask for PUK
+!
+ASK 1 "Your SIM is locked.  Please enter the 8 digit PUK:" 107
+JUMP 15
+!
+!
+@LABEL 13
+!
+! Ask for user-defined password
+!
+ASK 1 "Please enter your SIM PIN code (4-8 digits):" 107
+JUMP 15
+!
+!
+@LABEL 14
+!
+! Incorrect password entered
+!
+ASK 1 "You have entered an incorrect password. Please re-enter your password:" 107
+JUMP 15
+!
+!
+@LABEL 15
+!
+! Send user-provided password to SIM and try again
+!
+write "AT+CPIN=\34^*\34\13"
+JUMP 10
+!
+! \ --------------------------- SIM CHECK AND PIN ---------------------------- /
+!
+! / ------------------------------- MODEM SETUP ------------------------------ \
+!
+@LABEL 20
+!
+! Check to see if the modem is responding and set defaults
+!
+matchclr
+matchstr 1 21 "OK\13\10"
+write "AT&F\13"
+matchread 30
+inctries
+iftries 3 106
+jsr 9
+jump 1
+!
+!
+@LABEL 21
+!
+! Configure the modem.
+!
+matchclr
+matchstr 1 22   "OK\13\10"
+matchstr 2 106 "ERROR\13\10"
+write "AT&F&D2&C1E0V1S0=0\13"
+matchread 30
+inctries
+iftries 3 106
+jsr 9
+jump 20
+!
+!
+@LABEL 22
+pause 20
+settries 0
+!
+! \ ------------------------------- MODEM SETUP ------------------------------ /
+!
+! / ------------------------ NETWORK FEATURES SETUP -------------------------- \
+!
+@LABEL 30
+!
+! Set PDP context
+!
+matchclr
+matchstr 1 33  "OK\13\10"
+matchstr 2 108 "ERROR\13\10"
+!
+! Check Access Point Name stored in dialstring (VarString 1)
+! If APN is set to None, ignore it
+!
+ifstr 1 31 "None"
+ifstr 1 31 "none"
+ifstr 1 31 "NONE"
+!
+!	Set APN using +CGDCONT=1,"IP","<APN>"
+!
+write "AT+CGDCONT=1,\34IP\34,\34drei.at\34\13"
+jump 32
+!
+!
+@LABEL 31
+!
+!	No APN
+!
+!
+@LABEL 32
+matchread 60
+inctries
+iftries 3 106
+jump 30
+!
+!
+@LABEL 33
+!
+! Set registration reporting on
+!
+matchclr
+matchstr 1 36   "OK\13\10"
+matchstr 2 106 "ERROR\13\10"
+write "AT+CGREG=1\13"
+matchread 30
+!
+!
+@LABEL 36
+!
+! Attempt to connect to the UMTS network
+matchclr
+matchstr 1 40   "OK\13\10"
+matchstr 2 103 "ERROR\13\10"
+note "doing at+cgatt" 1
+write "AT+CGATT=1\13"
+matchread 100
+inctries
+iftries 3 106
+jsr 9
+jump 36
+!
+! \ ------------------------ NETWORK FEATURES SETUP -------------------------- /
+!
+! / ----------------------- CHECK NETWORK CONNECTION ------------------------- \
+!
+@LABEL 40
+!
+settries 0
+!
+@LABEL 41
+!
+! Check for successful registration
+!
+matchclr
+matchstr 1 42   "+CGREG: 0,1"
+matchstr 2 43   "+CGREG: 0,5"
+matchstr 3 42   "+CGREG: 1,1"
+matchstr 4 43   "+CGREG: 1,5"
+matchstr 5 103  "ERROR\13\10"
+write "AT+CGREG?\13"
+matchread 20
+inctries
+iftries 15 96
+jump 41
+note "ERROR: No network detected within 30 seconds" 1
+jump 96
+!
+!
+@LABEL 42
+!
+note "Home connection to GPRS network.  Dialing ..." 1
+jump 44
+!
+!
+@LABEL 43
+!
+! //TOKEN
+! STEH - took out roaming dialog.
+! ask 2 "You are about to connect to a roaming network and could incur additional charges.\13Would you like to continue?" 107
+note "Making a roaming connection." 1
+jump 44
+!
+!
+@LABEL 44
+!
+! Jump to signal quality check subroutine
+!
+jump 50
+!
+! \ ----------------------- CHECK NETWORK CONNECTION ------------------------- /
+!
+! / -----------------------------  MAKE THE CALL ----------------------------- \
+!
+@LABEL 45
+!
+flush
+note "Making connection" 1
+write "ATD*99***1#\13"
+!
+!
+@LABEL 46
+!
+! GPRS just responds with CONNECT and no speed.
+!
+matchclr
+matchstr  1 102 "NO DIALTONE\13\10"
+matchstr  2 103 "NO CARRIER"
+matchstr  3 103 "ERROR\13\10"
+matchstr  4 104 "BUSY\13\10"
+matchstr  5 105 "NO ANSWER\13\10"
+matchstr  6 47  "CONNECT\13\10"
+matchstr  7 47  "CONNECT 384000\13\10"
+matchstr  8 47  "CONNECT"
+matchread 700
+jump 105
+!
+!
+@LABEL 47
+!
+! Connected.  GPRS (including EDGE) does not indicate speed.
+!
+note "Communicating at an unspecified rate via UMTS." 1
+!communicatingat 384000
+userhook 2
+!
+! \ -----------------------------  MAKE THE CALL ----------------------------- /
+!
+!
+@LABEL 48
+!
+! Turn CTS on, for hardware flow control
+!
+HSReset 0 1 0 0 0 0
+!
+pause 30
+!
+@LABEL 49
+exit 0
+!
+!
+! / -------------------------- CHECK SIGNAL QUALITY -------------------------- \
+!
+@LABEL 50
+!
+! Report signal strength
+!
+matchclr
+matchstr 1 51 "+CSQ: 0,"
+matchstr 2 52 "+CSQ: 1,"
+matchstr 3 53 "+CSQ: 2,"
+matchstr 4 54 "+CSQ: 3,"
+matchstr 5 55 "+CSQ: 4,"
+matchstr 6 56 "+CSQ: 5,"
+matchstr 7 57 "+CSQ: 6,"
+matchstr 8 58 "+CSQ: 7,"
+matchstr 9 59 "+CSQ: 8,"
+matchstr 10 60 "+CSQ: 9,"
+matchstr 11 61 "+CSQ: 10,"
+matchstr 12 62 "+CSQ: 11,"
+matchstr 13 63 "+CSQ: 12,"
+matchstr 14 64 "+CSQ: 13,"
+matchstr 15 65 "+CSQ: 14,"
+matchstr 16 66 "+CSQ: 15,"
+matchstr 17 67 "+CSQ: 16,"
+matchstr 18 68 "+CSQ: 17,"
+matchstr 19 69 "+CSQ: 18,"
+matchstr 20 70 "+CSQ: 19,"
+matchstr 21 71 "+CSQ: 20,"
+matchstr 22 72 "+CSQ: 21,"
+matchstr 23 73 "+CSQ: 22,"
+matchstr 24 74 "+CSQ: 23,"
+matchstr 25 75 "+CSQ: 24,"
+matchstr 26 76 "+CSQ: 25,"
+matchstr 27 77 "+CSQ: 26,"
+matchstr 28 78 "+CSQ: 27,"
+matchstr 29 79 "+CSQ: 28,"
+matchstr 30 80 "+CSQ: 29,"
+matchstr 31 81 "+CSQ: 30,"
+matchstr 32 82 "+CSQ: 31,"
+write "AT+CSQ\13"
+matchread 30
+note "Signal strength unknown" 1
+!
+! Since signal strength is unknown, error rate will be too
+!
+jump 92
+!
+!
+@LABEL 51
+note "Signal strength 0:  RSSI -113dBm or less" 1
+jump 83
+@LABEL 52
+note "Signal strength 1:  RSSI -111dBm" 1
+jump 83
+@LABEL 53
+note "Signal strength 2:  RSSI -109dBm" 1
+jump 83
+@LABEL 54
+note "Signal strength 3:  RSSI -107dBm" 1
+jump 83
+@LABEL 55
+note "Signal strength 4:  RSSI -105dBm" 1
+jump 83
+@LABEL 56
+note "Signal strength 5:  RSSI -103dBm" 1
+jump 83
+@LABEL 57
+note "Signal strength 6:  RSSI -101dBm" 1
+jump 83
+@LABEL 58
+note "Signal strength 7:  RSSI -99dBm" 1
+jump 83
+@LABEL 59
+note "Signal strength 8:  RSSI -97dBm" 1
+jump 83
+@LABEL 60
+note "Signal strength 9:  RSSI -95dBm" 1
+jump 83
+@LABEL 61
+note "Signal strength 10:  RSSI -93dBm" 1
+jump 83
+@LABEL 62
+note "Signal strength 11:  RSSI -91dBm" 1
+jump 83
+@LABEL 63
+note "Signal strength 12:  RSSI -89dBm" 1
+jump 83
+@LABEL 64
+note "Signal strength 13:  RSSI -87dBm" 1
+jump 83
+@LABEL 65
+note "Signal strength 14:  RSSI -85dBm" 1
+jump 83
+@LABEL 66
+note "Signal strength 15:  RSSI -83dBm" 1
+jump 83
+@LABEL 67
+note "Signal strength 16:  RSSI -81dBm" 1
+jump 83
+@LABEL 68
+note "Signal strength 17:  RSSI -79dBm" 1
+jump 83
+@LABEL 69
+note "Signal strength 18:  RSSI -77dBm" 1
+jump 83
+@LABEL 70
+note "Signal strength 19:  RSSI -75dBm" 1
+jump 83
+@LABEL 71
+note "Signal strength 20:  RSSI -73dBm" 1
+jump 83
+@LABEL 72
+note "Signal strength 21:  RSSI -71dBm" 1
+jump 83
+@LABEL 73
+note "Signal strength 22:  RSSI -69dBm" 1
+jump 83
+@LABEL 74
+note "Signal strength 23:  RSSI -67dBm" 1
+jump 83
+@LABEL 75
+note "Signal strength 24:  RSSI -65dBm" 1
+jump 83
+@LABEL 76
+note "Signal strength 25:  RSSI -63dBm" 1
+jump 83
+@LABEL 77
+note "Signal strength 26:  RSSI -61dBm" 1
+jump 83
+@LABEL 78
+note "Signal strength 27:  RSSI -59dBm" 1
+jump 83
+@LABEL 79
+note "Signal strength 28:  RSSI -57dBm" 1
+jump 83
+@LABEL 80
+note "Signal strength 29:  RSSI -55dBm" 1
+jump 83
+@LABEL 81
+note "Signal strength 30:  RSSI -53dBm" 1
+jump 83
+@LABEL 82
+note "Signal strength 31:  RSSI -51dBm or greater" 1
+jump 83
+!
+!
+@LABEL 83
+matchclr
+matchstr 1 84 "0\13\10"
+matchstr 2 85 "1\13\10"
+matchstr 3 86 "2\13\10"
+matchstr 4 87 "3\13\10"
+matchstr 5 88 "4\13\10"
+matchstr 6 89 "5\13\10"
+matchstr 7 90 "6\13\10"
+matchstr 8 91 "7\13\10"
+matchread 30
+note "Bit error rate unknown" 1
+jump 92
+!
+!
+@LABEL 84
+note "Bit error rate (RXQUAL) 0" 1
+jump 92
+@LABEL 85
+note "Bit error rate (RXQUAL) 1" 1
+jump 92
+@LABEL 86
+note "Bit error rate (RXQUAL) 2" 1
+jump 92
+@LABEL 87
+note "Bit error rate (RXQUAL) 3" 1
+jump 92
+@LABEL 88
+note "Bit error rate (RXQUAL) 4" 1
+jump 92
+@LABEL 89
+note "Bit error rate (RXQUAL) 5" 1
+jump 92
+@LABEL 90
+note "Bit error rate (RXQUAL) 6" 1
+jump 92
+@LABEL 91
+note "Bit error rate (RXQUAL) 7" 1
+jump 92
+!
+!
+@LABEL 92
+!
+! Return to dial script
+!
+jump 45
+!
+! \ -------------------------- CHECK SIGNAL QUALITY -------------------------- /
+!
+! / --------------------------- HANG UP AND RESET ---------------------------- \
+!
+@HANGUP
+@LABEL 93
+settries 0
+HSReset 0 0 0 0 0 0
+!
+@LABEL 94
+!
+!  Escape from data to command mode
+!
+matchclr
+matchstr 1 95 "OK\13\10"
+pause 11
+write "+++"
+matchread 20
+!
+@LABEL 95
+!
+! Send hangup command
+!
+pause 10
+matchclr
+matchstr 1 97 "NO CARRIER\13\10"
+matchstr 2 97 "OK\13\10"
+matchstr 3 97 "ERROR\13\10"
+matchstr 4 97 "0\13\10"
+write "ATH0\13"
+matchread 30
+! 
+! If that fails, toggle DTR
+!
+DTRClear
+pause 5
+DTRSet
+flush
+!
+! Try this three times only
+!
+inctries
+iftries 3 106
+jump 94
+!
+!
+@LABEL 96
+!
+! Network stopped responding.  Turn off radio and exit with error
+!
+!pause 10
+!matchclr
+!matchstr 1 111 "OK\13\10"
+!write "AT+CFUN=0\13"
+!matchread 30
+jump 111
+!
+!
+@LABEL 97
+!
+! Reset phone to default settings
+!
+pause 10
+matchclr
+matchstr 1 98 "OK\13\10"
+write "AT&F\13"
+matchread 30
+jump 106
+!
+@LABEL 98
+!
+! Turn off the radio and exit
+!
+!pause 10
+!matchclr
+!matchstr 1 99 "OK\13\10"
+!write "AT+CFUN=0\13"
+!matchread 30
+!jump 99
+!
+@LABEL 99
+pause 20
+exit 0
+!
+! \ --------------------------- HANG UP AND RESET ---------------------------- /
+!
+! / --------------------------------- ERRORS --------------------------------- \
+!
+! Modem Not Responding -- Power already off
+@LABEL 101
+exit -6002 "The device is not responding.  Wait a few seconds and try again.  If the problem continues, eject and reinsert the card."
+!
+! No Dial Tone
+@LABEL 102
+exit -6020
+!
+! No Carrier or Error
+@LABEL 103
+!write "AT+CFUN=0\13"
+exit -6021
+!
+! Busy
+@LABEL 104
+exit -6022
+!
+! No Answer
+@LABEL 105
+exit -6023
+!
+! Modem Not Responding -- Power still on
+@LABEL 106
+!write "AT+CFUN=0\13"
+exit -6002 "The device is not responding.  Wait a few seconds and try again.  If the problem continues, eject and reinsert the card."
+!
+! User Cancellation
+@LABEL 107
+!write "AT+CFUN=0\13"
+exit -6008
+!
+@LABEL 108
+EXIT -6002 "The device is not responding.  Wait a few seconds and try again.  If the problem continues, eject and reinsert the card."
+!
+@LABEL 109
+exit -6002 "There is a problem with the password of the SIM card. Please check the PIN code and the PUK code."
+!
+@LABEL 110
+exit -6002 "The SIM card was not detected.  Please remove the device and insert (or reinsert) your SIM card."
+!
+@LABEL 111
+exit -6002 "The network stopped responding."
+!
+@LABEL 112
+exit -6002 "The network stopped responding."
+!
+@LABEL 113
+exit -6002 "There is a problem with the SIM card.  Verify the SIM in another device and/or try another SIM. (SIM failure)"
+!
+@LABEL 114
+exit -6002 "There is a problem with the SIM card.  Verify the SIM in another device and/or try another SIM. (SIM busy)"
+!
+@LABEL 115
+exit -6002 "There is a problem with the SIM card.  Verify the SIM in another device and/or try another SIM. (SIM wrong)"
+!
+@LABEL 116
+exit -6002 "You SIM is PUK locked.  You will need to enter the PUK code by using the PIN management features in the control panel utility."
+!
+! \ --------------------------------- ERRORS --------------------------------- /

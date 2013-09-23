@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CCL Personalities</key>
+    <dict>
+        <key>Default Personality</key>
+        <dict>
+            <key>CCLParameters</key>
+            <dict>
+                <key>Connect Speed</key>
+                <string></string>
+            </dict>
+            <key>Connect Type</key>
+            <string>Dialup</string>
+            <key>Device Names</key>
+            <array>
+                <dict>
+                    <key>DeviceModel</key>
+                    <string>ZTE USB Modem</string>
+                    <key>DeviceVendor</key>
+                    <string>ZTE</string>
+                </dict>
+            </array>
+            <key>Script Name</key>
+            <string>ZTE_USB_MODEM</string>
+        </dict>
+    </dict>
+    <key>CCL Version</key>
+    <integer>1</integer>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>English</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.apple.ccl.ZTE_USB_Modem</string>
+    <key>CFBundleName</key> 
+    <string>ZTE_USB_Modem</string>
+    <key>CFBundlePackageType</key>
+    <string>CCLB</string>
+    <key>CFBundleShortVersionString</key> 
+    <string>10.8</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+</dict>
+</plist>
